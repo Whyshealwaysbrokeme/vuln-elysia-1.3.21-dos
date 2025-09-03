@@ -192,3 +192,8 @@ Severity should be rated **High/Critical**.
 - Add runtime guards to reject untrusted strings before composing handlers.
 
 ---
+
+## Disclosure
+- **Status:** Under responsible disclosure  
+- **Disclosure Date:** 03 September 2025  
+- **Reporter:** Manopakorn Kooharueangrong (Whyshealwaysbrokeme)
