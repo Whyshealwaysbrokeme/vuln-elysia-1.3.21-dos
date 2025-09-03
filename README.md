@@ -16,7 +16,7 @@ If attacker-controlled values flow into these strings (e.g., schema definitions,
 
 - **Package:** `elysia` (npm)  
 - **Repository:** [github.com/elysiajs/elysia](https://github.com/elysiajs/elysia)  
-- **Affected File:** `[src/compose.ts](https://github.com/elysiajs/elysia/blob/main/src/compose.ts)`  
+- **Affected File:** [src/compose.ts](https://github.com/elysiajs/elysia/blob/main/src/compose.ts)
 - **Affected Function(s):** `composeHandler`, `compile`  
 - **Affected Versions:** ≤ 1.3.21 (latest tested)  
 - **Root Cause:** Dynamic handler generation using the JavaScript Function constructor (`Function(...)`) with string concatenation.  
