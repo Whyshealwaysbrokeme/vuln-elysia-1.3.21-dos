@@ -140,6 +140,11 @@ Expected:
 
 ---
 
+#### PoC Demonstration (GIF)
+
+![PoC Demonstration](https://github.com/Whyshealwaysbrokeme/vuln-elysia-1.3.21-rce/blob/main/poc.gif)
+
+
 ## Attack Vector
 
 This vulnerability becomes exploitable in **real-world deployments** when applications using Elysia load or accept **untrusted values** that are used in handler composition.
