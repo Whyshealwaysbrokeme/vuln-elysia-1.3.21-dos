@@ -137,7 +137,8 @@ Expected:
 ```json
 {"body":"[contents of /etc/passwd]\n"}
 ```
-*Note: Actual output depends on the server environment and user context*
+*Note: Actual output depends on the server environment and user context 
+(e.g., "root:x:0:0:root:/root:/bin/bash", "ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash", "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin").*
 
 ---
 
