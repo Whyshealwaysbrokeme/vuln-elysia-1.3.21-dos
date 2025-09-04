@@ -1,4 +1,4 @@
-# vuln-elysia-1.3.21-ddos
+# vuln-elysia-1.3.21-dos
 
 ## Summary
 
