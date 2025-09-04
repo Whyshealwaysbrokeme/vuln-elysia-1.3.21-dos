@@ -75,7 +75,8 @@ TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
     at composeHandler (.../elysia/src/compose.ts:657:33)
     ...
 ```
-
+![DoS Attack Demonstration](poc-elysia-dos.gif)
+*Figure: Demonstration of the DoS attack against Elysia server*
 ---
 
 ## Attack Vector
