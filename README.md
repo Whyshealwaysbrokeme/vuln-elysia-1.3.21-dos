@@ -36,7 +36,7 @@ TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
 
 ## Proof of Concept (PoC)
 
-### Vulnerable Server (server.mjs)
+### Vulnerable Server (poc-elysia-dos.mjs)
 ```js
 import { Elysia, t } from 'elysia'
 
@@ -52,7 +52,7 @@ console.log("Server listening on http://localhost:3000")
 
 ### Run the server
 ```bash
-bun server.mjs
+bun poc-elysia-dos.mjs
 ```
 
 ### Test normal route
