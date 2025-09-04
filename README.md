@@ -76,7 +76,7 @@ TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
     ...
 ```
 
-**Demonstration:**  
+### Demonstration
 ![DoS Attack Demonstration](poc-elysia-dos.gif)
 
 ---
