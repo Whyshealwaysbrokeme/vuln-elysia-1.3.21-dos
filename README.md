@@ -110,4 +110,4 @@ TypeError: undefined is not an object (evaluating 'schema.$defs[schema.$ref]')
 ## Disclosure
 - **Status:** Under responsible disclosure  
 - **Disclosure Date:** 04 September 2025  
-- **Reporter:** Manopakorn Kooharueangrong (Whyshealwaysbrokeme)
+- **Reporter:** Manopakorn Kooharueangrong (manop55555)
